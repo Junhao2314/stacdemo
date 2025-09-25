@@ -86,4 +86,4 @@ CMD ["npm", "run", "preview"]
 
 ## 📝 License
 
-MIT License - Feel free to use and modify as needed.
+Feel free to use and modify as needed.
