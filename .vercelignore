@@ -1,0 +1,13 @@
+# Ignore files not needed for Vercel builds/uploads
+.git/
+node_modules/
+.github/
+.DS_Store
+npm-debug.log*
+
+# Local build cache
+.vite/
+
+# Keep dist built on Vercel; ignored for CLI uploads
+dist/
+

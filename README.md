@@ -64,6 +64,24 @@ Open http://localhost:5173/ in your browser. The app loads with a pre-filled Sen
 
 ## 🚀 Deployment
 
+### Vercel Deployment
+
+- Ensure `vercel.json` and `.vercelignore` exist in the project root.
+- Vercel uses the `@vercel/static-build` to run `npm run build` and serve `dist`.
+- SPA routing is handled with a rewrite to `index.html`.
+
+Steps:
+1. Install Vercel CLI locally: `npm i -g vercel`
+2. Link the project: `vercel` (choose scope and project)
+3. Deploy: `vercel --prod`
+
+Alternatively, deploy from Vercel Dashboard:
+- Import the Git repo
+- Framework preset: "Other"
+- Build Command: `npm run build`
+- Output Directory: `dist`
+- Install Command: `npm ci` (or default)
+
 ### GitHub Pages Deployment
 
 1. Push the repository to GitHub
