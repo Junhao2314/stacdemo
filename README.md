@@ -7,7 +7,7 @@ A professional tool that combines [OpenLayers](https://openlayers.org/) with [ol
 - **STAC Data Visualization**: Load and display STAC Item JSON data with automatic extent fitting
 - **OpenLayers Integration**: Built on OpenLayers v10.6.1 with ol-stac for robust geospatial rendering
 - **Responsive Design**: Optimized UI that works on desktop and mobile devices
-- **Modern UI**: Clean, professional interface with gradient header and inline controls
+- **Modern UI**: Clean interface with gradient header and inline controls
 - **Status Tracking**: Real-time status updates displayed in the footer
 - **Error Handling**: Comprehensive error handling with user-friendly messages
 
