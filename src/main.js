@@ -63,6 +63,8 @@ function initializeApp() {
 // Initialize app when DOM is ready
 let stacLayer;
 let app;
+// Track current load attempt for timeout control
+let currentLoad = null;
 
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
@@ -97,6 +99,31 @@ function logActivity(action, data) {
   // }).catch(err => console.error('Logging failed:', err));
 }
 
+// Best-effort backend logging for failures
+function logToBackend(entry) {
+  try {
+    const payload = {
+      timestamp: new Date().toISOString(),
+      userAgent: navigator.userAgent,
+      referrer: document.referrer || 'direct',
+      ...entry,
+    };
+    const url = '/api/log';
+    const body = JSON.stringify(payload);
+    if (navigator.sendBeacon) {
+      const blob = new Blob([body], { type: 'application/json' });
+      navigator.sendBeacon(url, blob);
+    } else if (typeof fetch === 'function') {
+      fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+        keepalive: true,
+      }).catch(() => {});
+    }
+  } catch (_) { /* ignore */ }
+}
+
 function setStatus(message, type = "info") {
   if (!app || !app.statusLabel) return;
   
@@ -107,10 +134,18 @@ function setStatus(message, type = "info") {
   logActivity('status_change', { message, type });
 }
 
-function attachLayerEvents(layer, url) {
+function attachLayerEvents(layer, url, token) {
   if (!app) return;
   
   layer.once("sourceready", () => {
+    if (token && (token.timedOut || currentLoad !== token)) {
+      return;
+    }
+    if (token && token.timeoutId) {
+      clearTimeout(token.timeoutId);
+      token.timeoutId = null;
+      currentLoad = null;
+    }
     const view = app.map.getView();
     const extent = layer.getExtent();
 
@@ -125,11 +160,21 @@ function attachLayerEvents(layer, url) {
   });
 
   layer.once("error", (event) => {
+    if (token && (token.timedOut || currentLoad !== token)) {
+      return;
+    }
+    if (token && token.timeoutId) {
+      clearTimeout(token.timeoutId);
+      token.timeoutId = null;
+      currentLoad = null;
+    }
     console.error("Failed to load STAC", event);
     setStatus("Failed to load STAC data. Check the URL and CORS settings.", "error");
     app.applyButton.disabled = false;
     // Log layer error
-    logActivity('stac_layer_error', { url, error: event.message || 'Layer load failed' });
+    const errMsg = event && event.message ? event.message : 'Layer load failed';
+    logActivity('stac_layer_error', { url, error: errMsg });
+    logToBackend({ level: 'error', action: 'stac_layer_error', url, message: errMsg });
   });
 }
 
@@ -159,7 +204,12 @@ function loadStac(url) {
 
   // Log STAC loading attempt
   logActivity('stac_load_attempt', { url });
-
+  
+  // Clear previous timeout if a new load starts
+  if (currentLoad && currentLoad.timeoutId) {
+    clearTimeout(currentLoad.timeoutId);
+    currentLoad = null;
+  }
   app.applyButton.disabled = true;
   setStatus("Loading STAC item...");
 
@@ -170,7 +220,21 @@ function loadStac(url) {
       url,
     });
 
-    attachLayerEvents(layer, url);
+    // Create a timeout token and enforce 10s limit
+    const token = { timeoutId: null, timedOut: false };
+    currentLoad = token;
+    token.timeoutId = setTimeout(() => {
+      token.timedOut = true;
+      if (stacLayer === layer) {
+        disposeCurrentLayer();
+      }
+      setStatus("Operation timed out.", "error");
+      app.applyButton.disabled = false;
+      logActivity('stac_timeout', { url });
+      logToBackend({ level: 'error', action: 'stac_timeout', url, message: 'Apply action timed out' });
+    }, 10000);
+
+    attachLayerEvents(layer, url, token);
     app.map.addLayer(layer);
     stacLayer = layer;
     
@@ -182,7 +246,9 @@ function loadStac(url) {
     app.applyButton.disabled = false;
     
     // Log error
-    logActivity('stac_load_error', { url, error: error.message });
+    const msg = (error && error.message) ? error.message : 'Unexpected STAC layer creation error';
+    logActivity('stac_load_error', { url, error: msg });
+    logToBackend({ level: 'error', action: 'stac_load_error', url, message: msg });
   }
 }
 
