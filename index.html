@@ -200,6 +200,111 @@
         }
       }
     </style>
+    <style>
+      .advanced-panel {
+        background: #ffffff;
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+      }
+      .advanced-panel details {
+        width: 100%;
+      }
+      .advanced-panel summary {
+        cursor: pointer;
+        font-weight: 600;
+        color: #0b7285;
+        outline: none;
+      }
+.advanced-grid {
+        margin-top: 0.75rem;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 0.75rem 1rem;
+        align-items: start;
+      }
+      /* Ensure first row aligns nicely on wider screens */
+      @media (min-width: 992px) {
+        .advanced-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+      }
+.advanced-grid .field input,
+      .advanced-grid .field textarea {
+        padding: 0.5rem 0.75rem;
+        border: 1.5px solid #cbd5f5;
+        border-radius: 0.375rem;
+        font-size: 1rem;
+        width: 100%;
+      }
+.advanced-grid .help {
+        font-size: 0.95rem;
+        color: #94a3b8;
+        margin: 0 0 0.25rem 0;
+      }
+      .help-nowrap { white-space: nowrap; }
+.advanced-bottom {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 0.75rem 1rem;
+        align-items: end;
+        grid-column: 1 / -1;
+      }
+      .advanced-bottom .field input {
+        width: 100%;
+        max-width: 100%;
+      }
+      @media (max-width: 720px) {
+        .advanced-bottom {
+          grid-template-columns: 1fr;
+        }
+        .advanced-bottom .field input {
+          width: 100%;
+        }
+      }
+/* Specific width tweaks */
+#adv-assets {
+        width: 100%;
+        max-width: 100%;
+      }
+#adv-extra-params {
+        width: 100%;
+        max-width: 100%;
+      }
+      @media (min-width: 1200px) {
+        #adv-extra-params { min-width: 960px; }
+      }
+      @media (max-width: 720px) {
+        #adv-assets { width: 100%; }
+        #adv-extra-params { width: 100%; }
+      }
+      .advanced-grid .field label {
+        display: block;
+        font-weight: 700;
+        margin-bottom: 0.375rem;
+        font-size: 1rem;
+      }
+      .advanced-grid .field.checkbox label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        font-weight: 600;
+      }
+      .advanced-grid .adv-actions {
+        align-self: end;
+        justify-self: end;
+        text-align: right;
+        margin: 0;
+      }
+      .advanced-grid .adv-actions button {
+        /* inherits default button style */
+      }
+      .hint {
+        margin-top: 0.5rem;
+        font-size: 0.85rem;
+        color: #64748b;
+      }
+    </style>
   </head>
   <body>
     <header>
@@ -209,16 +314,50 @@
     <main>
       <div class="controls">
         <div class="input-wrapper">
-          <label for="stacUrl">STAC Item URL</label>
+          <label for="stacUrl">Data URL (STAC Item or TileJSON)</label>
           <input
             id="stacUrl"
             type="url"
-            placeholder="https://example.com/path/to/stac-item.json"
+            placeholder="Enter STAC Item or TileJSON URL"
             autocomplete="off"
           />
         </div>
         <button id="apply">Apply</button>
       </div>
+
+      <div class="advanced-panel">
+        <details>
+          <summary>Advanced rendering (TileJSON)</summary>
+          <div class="advanced-grid">
+            <div class="field">
+              <label for="adv-assets">assets (comma-separated)</label>
+              <div class="help">red,green,blue or vv,vh</div>
+              <input id="adv-assets" type="text" />
+            </div>
+            <div class="field">
+              <label for="adv-color-formula">color_formula</label>
+<div class="help help-nowrap">gamma RGB 2.7, saturation 1.5, sigmoidal RGB 15 0.55</div>
+              <input id="adv-color-formula" type="text" />
+            </div>
+            
+            <div class="field">
+              <label for="adv-tile-format">tile_format</label>
+              <div class="help">png | jpg | webp</div>
+              <input id="adv-tile-format" type="text" />
+            </div>
+            <div class="advanced-bottom">
+              <div class="field">
+                <label for="adv-extra-params">extra params (k=v&k2=v2)</label>
+                <div class="help">k=v&k2=v2</div>
+                <input id="adv-extra-params" type="text" />
+              </div>
+              <div class="adv-actions"><button id="adv-refresh" type="button">Refresh</button></div>
+            </div>
+          </div>
+          <div class="hint">These options only apply when the URL is a TileJSON endpoint. They will be appended to the TileJSON URL before loading.</div>
+        </details>
+      </div>
+
       <div id="map" class="map"></div>
     </main>
     <footer>

@@ -5,7 +5,9 @@ import "ol/ol.css";
 import Map from "ol/Map.js";
 import View from "ol/View.js";
 import TileLayer from "ol/layer/Tile.js";
+import TileJSON from "ol/source/TileJSON.js";
 import {register} from "ol/proj/proj4.js";
+import {fromLonLat, transformExtent} from "ol/proj.js";
 import OSM from "ol/source/OSM.js";
 
 // Import STAC and proj4
@@ -14,7 +16,8 @@ import proj4 from "proj4";
 
 register(proj4);
 
-const defaultStacUrl = "https://s3.us-west-2.amazonaws.com/sentinel-cogs/sentinel-s2-l2a-cogs/10/T/ES/2022/7/S2A_10TES_20220726_0_L2A/S2A_10TES_20220726_0_L2A.json";
+// Default now uses a TileJSON from Microsoft Planetary Computer
+const defaultStacUrl = "https://planetarycomputer.microsoft.com/api/data/v1/item/tilejson.json?collection=landsat-c2-l2&item=LC09_L2SP_123043_20250926_02_T1&assets=red&assets=green&assets=blue&color_formula=gamma+RGB+2.7%2C+saturation+1.5%2C+sigmoidal+RGB+15+0.55&format=png";
 
 // Wait for DOM to be ready
 function initializeApp() {
@@ -22,6 +25,13 @@ function initializeApp() {
   const urlInput = document.getElementById("stacUrl");
   const applyButton = document.getElementById("apply");
   const statusLabel = document.getElementById("status");
+
+  // Advanced (TileJSON) controls - optional
+  const advAssetsInput = document.getElementById("adv-assets");
+  const advColorFormulaInput = document.getElementById("adv-color-formula");
+  const advTileFormatInput = document.getElementById("adv-tile-format");
+  const advExtraParamsInput = document.getElementById("adv-extra-params");
+  const advRefreshButton = document.getElementById("adv-refresh");
 
   if (!mapElement) {
     console.error('Map element not found!');
@@ -57,7 +67,10 @@ function initializeApp() {
     console.log('Map initialized with size:', mapElement.offsetWidth, 'x', mapElement.offsetHeight);
   }, 100);
 
-  return { map, mapElement, urlInput, applyButton, statusLabel, background };
+  return { map, mapElement, urlInput, applyButton, statusLabel, background,
+    advAssetsInput, advColorFormulaInput,
+    advTileFormatInput,
+    advExtraParamsInput, advRefreshButton };
 }
 
 // Initialize app when DOM is ready
@@ -134,7 +147,7 @@ function setStatus(message, type = "info") {
   logActivity('status_change', { message, type });
 }
 
-function attachLayerEvents(layer, url, token) {
+function attachLayerEvents(layer, url, token, options = { recenter: true }) {
   if (!app) return;
   
   layer.once("sourceready", () => {
@@ -149,7 +162,7 @@ function attachLayerEvents(layer, url, token) {
     const view = app.map.getView();
     const extent = layer.getExtent();
 
-    if (extent) {
+    if (extent && options.recenter) {
       view.fit(extent, {padding: [50, 50, 50, 50], duration: 500});
       // Log successful rendering
       logActivity('stac_rendered', { url, extent });
@@ -187,6 +200,180 @@ function disposeCurrentLayer() {
     }
 
     stacLayer = undefined;
+  }
+}
+
+function isTileJsonUrl(url) {
+  if (!url) return false;
+  const u = url.toLowerCase();
+  return u.includes('tilejson') || u.includes('f=tilejson');
+}
+
+function applyAdvancedTileJsonParams(url) {
+  if (!app) return url;
+  try {
+    const u = new URL(url, window.location.href);
+    const sp = u.searchParams;
+
+    // assets (repeatable)
+    if (app.advAssetsInput && app.advAssetsInput.value && app.advAssetsInput.value.trim()) {
+      sp.delete('assets');
+      const parts = app.advAssetsInput.value.split(/[\n,;\s]+/).map(s => s.trim()).filter(Boolean);
+      parts.forEach(v => sp.append('assets', v));
+    }
+
+    // color_formula
+    if (app.advColorFormulaInput && app.advColorFormulaInput.value && app.advColorFormulaInput.value.trim()) {
+      sp.set('color_formula', app.advColorFormulaInput.value.trim());
+    }
+
+
+
+    // asset_as_band default True (hidden)
+    sp.set('asset_as_band', 'True');
+
+    // tile_format
+    if (app.advTileFormatInput && app.advTileFormatInput.value && app.advTileFormatInput.value.trim()) {
+      sp.set('tile_format', app.advTileFormatInput.value.trim());
+    }
+
+    // extra params
+    if (app.advExtraParamsInput && app.advExtraParamsInput.value && app.advExtraParamsInput.value.trim()) {
+      const extra = app.advExtraParamsInput.value.trim().replace(/^[?&]+/, '');
+      const extraParams = new URLSearchParams(extra);
+      for (const [k, v] of extraParams.entries()) {
+        sp.append(k, v);
+      }
+    }
+
+    return u.toString();
+  } catch (_) {
+    return url;
+  }
+}
+
+function loadTileJson(url, options = { recenter: true }) {
+  if (!app) {
+    console.error('App not initialized');
+    return;
+  }
+  
+  if (!url) {
+    setStatus("Please enter a TileJSON URL.", "error");
+    app.applyButton.disabled = false;
+    return;
+  }
+
+  // Log TileJSON loading attempt
+  logActivity('tilejson_load_attempt', { url });
+
+  // Clear previous timeout if a new load starts
+  if (currentLoad && currentLoad.timeoutId) {
+    clearTimeout(currentLoad.timeoutId);
+    currentLoad = null;
+  }
+  app.applyButton.disabled = true;
+  setStatus("Loading TileJSON...");
+
+  disposeCurrentLayer();
+
+  try {
+    // Create a timeout token and enforce 10s limit
+    const token = { timeoutId: null, timedOut: false };
+    currentLoad = token;
+    token.timeoutId = setTimeout(() => {
+      token.timedOut = true;
+      if (stacLayer) {
+        disposeCurrentLayer();
+      }
+      setStatus("Operation timed out.", "error");
+      app.applyButton.disabled = false;
+      logActivity('tilejson_timeout', { url });
+      logToBackend({ level: 'error', action: 'tilejson_timeout', url, message: 'Apply action timed out' });
+    }, 10000);
+
+    // Preload TileJSON to derive extent/center and (optionally) set view
+    fetch(url, { credentials: 'omit' })
+      .then((resp) => {
+        if (!resp.ok) {
+          throw new Error("Failed to fetch TileJSON: " + resp.status + " " + resp.statusText);
+        }
+        return resp.json();
+      })
+      .then((tj) => {
+        let extent3857;
+        try {
+          if (Array.isArray(tj.bounds) && tj.bounds.length === 4) {
+            extent3857 = transformExtent(tj.bounds, 'EPSG:4326', app.map.getView().getProjection());
+          }
+        } catch (_) {}
+
+        const layerOptions = {
+          source: new TileJSON({
+            url,
+            crossOrigin: 'anonymous',
+          }),
+        };
+        if (extent3857) {
+          layerOptions.extent = extent3857;
+        }
+        const layer = new TileLayer(layerOptions);
+
+        attachLayerEvents(layer, url, token, options);
+        app.map.addLayer(layer);
+        stacLayer = layer;
+
+        const view = app.map.getView();
+        if (options.recenter) {
+          if (tj.center && Array.isArray(tj.center) && tj.center.length >= 2) {
+            const lon = tj.center[0];
+            const lat = tj.center[1];
+            const zoom = tj.center[2];
+            try {
+              view.setCenter(fromLonLat([lon, lat]));
+              if (typeof zoom === 'number') {
+                view.setZoom(zoom);
+              }
+            } catch (_) {}
+          } else if (extent3857) {
+            try {
+              view.fit(extent3857, { padding: [50, 50, 50, 50], duration: 500 });
+            } catch (_) {}
+          }
+
+          if (typeof tj.minzoom === 'number') {
+            try { view.setMinZoom(tj.minzoom); } catch (_) {}
+          }
+          if (typeof tj.maxzoom === 'number') {
+            try { view.setMaxZoom(tj.maxzoom); } catch (_) {}
+          }
+        }
+
+        // Log successful load
+        logActivity('tilejson_load_success', { url });
+      })
+      .catch((error) => {
+        if (token && token.timeoutId) {
+          clearTimeout(token.timeoutId);
+          token.timeoutId = null;
+          currentLoad = null;
+        }
+        console.error(error);
+        setStatus("Failed to load TileJSON. Check the URL and CORS settings.", "error");
+        app.applyButton.disabled = false;
+        const msg = (error && error.message) ? error.message : 'TileJSON load failed';
+        logActivity('tilejson_load_error', { url, error: msg });
+        logToBackend({ level: 'error', action: 'tilejson_load_error', url, message: msg });
+      });
+
+  } catch (error) {
+    console.error(error);
+    setStatus("Unexpected error creating TileJSON layer.", "error");
+    app.applyButton.disabled = false;
+
+    const msg = (error && error.message) ? error.message : 'Unexpected TileJSON layer creation error';
+    logActivity('tilejson_unexpected_error', { url, error: msg });
+    logToBackend({ level: 'error', action: 'tilejson_unexpected_error', url, message: msg });
   }
 }
 
@@ -252,19 +439,37 @@ function loadStac(url) {
   }
 }
 
+function loadData(url, options = {}) {
+  const opts = { recenter: true, ...options };
+  let finalUrl = url;
+  if (isTileJsonUrl(finalUrl)) {
+    finalUrl = applyAdvancedTileJsonParams(finalUrl);
+    loadTileJson(finalUrl, opts);
+  } else {
+    loadStac(finalUrl);
+  }
+}
+
 function setupEventListeners() {
   if (!app) return;
   
   app.applyButton.addEventListener("click", () => {
     const url = app.urlInput.value.trim();
-    loadStac(url);
+    loadData(url);
   });
 
   app.urlInput.addEventListener("keyup", (event) => {
     if (event.key === "Enter") {
-      loadStac(app.urlInput.value.trim());
+      loadData(app.urlInput.value.trim());
     }
   });
+
+  if (app.advRefreshButton) {
+    app.advRefreshButton.addEventListener("click", () => {
+      const url = app.urlInput.value.trim();
+      loadData(url, { recenter: false });
+    });
+  }
 }
 
 function loadInitialData() {
@@ -279,7 +484,7 @@ function loadInitialData() {
   // Ensure map is properly sized before loading default STAC
   setTimeout(() => {
     app.map.updateSize();
-    // Load default STAC after map is ready
-    loadStac(defaultStacUrl);
+    // Load default data (supports STAC item or TileJSON) after map is ready
+    loadData(defaultStacUrl);
   }, 300);
 }
