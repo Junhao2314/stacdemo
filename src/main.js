@@ -137,14 +137,41 @@ function logToBackend(entry) {
   } catch (_) { /* ignore */ }
 }
 
-function setStatus(message, type = "info") {
+function setStatus(message, type = "info", details = null) {
   if (!app || !app.statusLabel) return;
   
-  app.statusLabel.textContent = message;
+  // Prefer line breaks at '&' within long URLs for readability
+  const loadedPrefix = 'Loaded: ';
+  const escapeHtml = (s) => String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+  const htmlWithAmpBreaks = (raw) => escapeHtml(raw).replace(/&amp;/g, '&amp;<wbr>');
+
+  if (typeof message === 'string' && message.startsWith(loadedPrefix)) {
+    const rawUrl = message.slice(loadedPrefix.length);
+    app.statusLabel.innerHTML = escapeHtml(loadedPrefix) + htmlWithAmpBreaks(rawUrl);
+  } else {
+    app.statusLabel.textContent = message;
+  }
   app.statusLabel.classList.toggle("error", type === "error");
   
+  // Handle details display
+  const detailsElement = document.getElementById('status-details');
+  const detailsContent = document.getElementById('status-details-content');
+  
+  if (details && detailsElement && detailsContent) {
+    detailsElement.style.display = 'block';
+    detailsContent.textContent = typeof details === 'string' ? details : JSON.stringify(details, null, 2);
+  } else if (detailsElement) {
+    detailsElement.style.display = 'none';
+  }
+  
   // Log status changes
-  logActivity('status_change', { message, type });
+  logActivity('status_change', { message, type, hasDetails: !!details });
 }
 
 function attachLayerEvents(layer, url, token, options = { recenter: true }) {
@@ -402,41 +429,85 @@ function loadStac(url) {
 
   disposeCurrentLayer();
 
-  try {
-    const layer = new STAC({
-      url,
-    });
-
-    // Create a timeout token and enforce 10s limit
-    const token = { timeoutId: null, timedOut: false };
-    currentLoad = token;
-    token.timeoutId = setTimeout(() => {
-      token.timedOut = true;
-      if (stacLayer === layer) {
-        disposeCurrentLayer();
+  // First fetch the data to check if it's valid
+  fetch(url, { 
+    method: 'GET',
+    headers: {
+      'Accept': 'application/json, application/geo+json'
+    },
+    credentials: 'omit' 
+  })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
-      setStatus("Operation timed out.", "error");
-      app.applyButton.disabled = false;
-      logActivity('stac_timeout', { url });
-      logToBackend({ level: 'error', action: 'stac_timeout', url, message: 'Apply action timed out' });
-    }, 10000);
+      return response.json();
+    })
+    .then(data => {
+      // Log the raw data for debugging
+      console.log('STAC Response Data:', data);
+      
+      // Check if it's a FeatureCollection with empty features
+      if (data.type === 'FeatureCollection' && 
+          data.features && 
+          data.features.length === 0) {
+        // Display the raw data in the status with full details
+        setStatus(`No features found in the response. Click 'View details' to see raw data.`, "error", data);
+        console.log('Full response data:', JSON.stringify(data, null, 2));
+        app.applyButton.disabled = false;
+        logActivity('stac_empty_features', { url, data });
+        return;
+      }
+      
+      // If data looks valid, proceed with creating the layer
+      try {
+        const layer = new STAC({
+          url,
+        });
 
-    attachLayerEvents(layer, url, token);
-    app.map.addLayer(layer);
-    stacLayer = layer;
-    
-    // Log successful load
-    logActivity('stac_load_success', { url });
-  } catch (error) {
-    console.error(error);
-    setStatus("Unexpected error creating STAC layer.", "error");
-    app.applyButton.disabled = false;
-    
-    // Log error
-    const msg = (error && error.message) ? error.message : 'Unexpected STAC layer creation error';
-    logActivity('stac_load_error', { url, error: msg });
-    logToBackend({ level: 'error', action: 'stac_load_error', url, message: msg });
-  }
+        // Create a timeout token and enforce 10s limit
+        const token = { timeoutId: null, timedOut: false, rawData: data };
+        currentLoad = token;
+        token.timeoutId = setTimeout(() => {
+          token.timedOut = true;
+          if (stacLayer === layer) {
+            disposeCurrentLayer();
+          }
+          // Show timeout with raw data info
+          setStatus(`Operation timed out. Click 'View details' to see the fetched data.`, "error", token.rawData);
+          console.log('Timeout - Full response data:', JSON.stringify(token.rawData, null, 2));
+          app.applyButton.disabled = false;
+          logActivity('stac_timeout', { url, data: token.rawData });
+          logToBackend({ level: 'error', action: 'stac_timeout', url, message: 'Apply action timed out', data: token.rawData });
+        }, 10000);
+
+        attachLayerEvents(layer, url, token);
+        app.map.addLayer(layer);
+        stacLayer = layer;
+        
+        // Log successful load
+        logActivity('stac_load_success', { url, data });
+      } catch (error) {
+        console.error(error);
+        setStatus(`Error creating STAC layer. Click 'View details' to see the response data.`, "error", data);
+        console.log('Layer creation error - Full response data:', JSON.stringify(data, null, 2));
+        app.applyButton.disabled = false;
+        
+        // Log error
+        const msg = (error && error.message) ? error.message : 'Unexpected STAC layer creation error';
+        logActivity('stac_load_error', { url, error: msg, data });
+        logToBackend({ level: 'error', action: 'stac_load_error', url, message: msg, data });
+      }
+    })
+    .catch(error => {
+      console.error('Fetch error:', error);
+      setStatus(`Failed to fetch STAC data: ${error.message}`, "error");
+      app.applyButton.disabled = false;
+      
+      // Log fetch error
+      logActivity('stac_fetch_error', { url, error: error.message });
+      logToBackend({ level: 'error', action: 'stac_fetch_error', url, message: error.message });
+    });
 }
 
 function loadData(url, options = {}) {
