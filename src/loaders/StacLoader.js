@@ -42,7 +42,7 @@ export class StacLoader extends LoaderBase {
       // 检查空 FeatureCollection / Check empty FeatureCollection
       if (data.type === 'FeatureCollection' && data.features?.length === 0) {
         this.statusManager.setStatus(
-          "No features found in the response. Click 'View details' to see raw data. / 响应中未找到要素。点击"查看详情"查看原始数据。",
+          "No features found in the response. Click 'View details' to see raw data. / 响应中未找到要素。点击「查看详情」查看原始数据。",
           'error',
           data
         );
