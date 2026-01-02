@@ -3,9 +3,9 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; connect-src 'self' https://planetarycomputer.microsoft.com https://*.amazonaws.com https://*.earth-search.aws.element84.com https://*.tile.openstreetmap.org; frame-ancestors 'none'; base-uri 'self'; form-action 'self'">
     <title>OpenLayers STAC Viewer</title>
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@v10.2.1/ol.css">
     <style>
       * {
         box-sizing: border-box;
@@ -148,6 +148,56 @@
         color: #666;
         font-size: 0.9rem;
         z-index: 0;
+      }
+
+      /* Loading Overlay */
+      .loading-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(255, 255, 255, 0.85);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s, visibility 0.2s;
+        border-radius: 0.5rem;
+      }
+
+      .loading-overlay.active {
+        opacity: 1;
+        visibility: visible;
+      }
+
+      .spinner {
+        width: 48px;
+        height: 48px;
+        border: 4px solid #e2e8f0;
+        border-top-color: #0b7285;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
+      .loading-text {
+        margin-top: 1rem;
+        font-size: 0.95rem;
+        color: #475569;
+        font-weight: 500;
+      }
+
+      .loading-progress {
+        margin-top: 0.5rem;
+        font-size: 0.8rem;
+        color: #94a3b8;
       }
 
       footer {
@@ -311,6 +361,28 @@
           min-height: 300px;
         }
       }
+
+      /* Scale Control Styles - Simple Line Style */
+      .custom-scale-line {
+        position: absolute;
+        left: 12px;
+        bottom: 12px;
+        background: transparent;
+      }
+
+      .custom-scale-line .ol-scale-line-inner {
+        display: inline-block;
+        background: #fff;
+        border: 1px solid #333;
+        border-top: none;
+        color: #333;
+        font-size: 11px;
+        font-weight: 400;
+        font-family: system-ui, -apple-system, sans-serif;
+        text-align: center;
+        padding: 2px 0;
+        min-width: 60px;
+      }
     </style>
     <style>
       .advanced-panel {
@@ -471,7 +543,13 @@
         </details>
       </div>
 
-      <div id="map" class="map"></div>
+      <div id="map" class="map">
+        <div id="loading-overlay" class="loading-overlay">
+          <div class="spinner"></div>
+          <div id="loading-text" class="loading-text">Loading...</div>
+          <div id="loading-progress" class="loading-progress"></div>
+        </div>
+      </div>
     </main>
     <footer>
       <div class="footer-content">

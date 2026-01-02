@@ -1,3 +1,5 @@
+**[English](README.md)** | **[中文](README_ZH.md)**
+
 # 🌍 OpenLayers STAC Viewer
 
 A professional tool that combines [OpenLayers](https://openlayers.org/) with [ol-stac](https://github.com/m-mohr/ol-stac) to visualize SpatioTemporal Asset Catalog (STAC) Item JSON documents from any public source.
