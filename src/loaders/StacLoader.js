@@ -82,7 +82,7 @@ export class StacLoader extends LoaderBase {
     } catch (error) {
       console.error(error);
       this.statusManager.setStatus(
-        "Error creating STAC layer. Click 'View details' to see the response data. / 创建 STAC 图层出错。点击"查看详情"查看响应数据。",
+        "Error creating STAC layer. Click 'View details' to see the response data. / 创建 STAC 图层出错。点击「查看详情」查看响应数据。",
         'error',
         data
       );
