@@ -42,7 +42,7 @@ export class StacLoader extends LoaderBase {
       // 检查空 FeatureCollection / Check empty FeatureCollection
       if (data.type === 'FeatureCollection' && data.features?.length === 0) {
         this.statusManager.setStatus(
-          "No features found in the response. Click 'View details' to see raw data. / 响应中未找到要素。点击"查看详情"查看原始数据。",
+          "No features found in the response. Click 'View details' to see raw data. / 响应中未找到要素。点击「查看详情」查看原始数据。",
           'error',
           data
         );
@@ -82,7 +82,7 @@ export class StacLoader extends LoaderBase {
     } catch (error) {
       console.error(error);
       this.statusManager.setStatus(
-        "Error creating STAC layer. Click 'View details' to see the response data. / 创建 STAC 图层出错。点击"查看详情"查看响应数据。",
+        "Error creating STAC layer. Click 'View details' to see the response data. / 创建 STAC 图层出错。点击「查看详情」查看响应数据。",
         'error',
         data
       );
