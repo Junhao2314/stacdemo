@@ -95,7 +95,7 @@ export function createStatusManager(statusLabel) {
 
       if (!statusLabel) return;
 
-      const loadedPrefix = 'Loaded: / 已加载: ';
+      const loadedPrefix = 'Loaded: ';
       
       if (typeof message === 'string' && message.startsWith(loadedPrefix)) {
         const rawUrl = message.slice(loadedPrefix.length);

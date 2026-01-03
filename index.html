@@ -243,24 +243,21 @@
       }
 
       .status-line {
-        display: flex;
-        align-items: flex-start;
-        gap: 0.5rem;
-        flex-wrap: wrap;
+        display: block;
+        margin-top: 0.25rem;
       }
 
-      .status-line strong {
-        flex: 0 0 auto;
-      }
-
-      .status-line .status {
-        flex: 1 1 auto;
-        min-width: 0;
+      .status-label {
+        font-size: 0.85rem;
+        color: #475569;
+        font-weight: 600;
       }
 
       .credits {
-        text-align: right;
+        font-size: 0.8rem;
         line-height: 1.6;
+        color: #94a3b8;
+        text-align: right;
         flex-shrink: 0;
       }
 
@@ -268,7 +265,7 @@
         background: #f1f5f9;
         padding: 0.125rem 0.375rem;
         border-radius: 0.25rem;
-        font-size: 0.8rem;
+        font-size: 0.75rem;
         color: #0f172a;
       }
 
@@ -554,15 +551,13 @@
     <footer>
       <div class="footer-content">
         <div class="footer-row">
-          <div class="status-section">
-            <div class="status-line">
-              <strong>Status:</strong> <span id="status" class="status">Ready</span>
-            </div>
-          </div>
+          <div class="status-label">Status:</div>
           <div class="credits">
-            <div>Built with <code>ol</code> and <code>ol-stac</code></div>
-            <div style="font-size: 0.8rem; margin-top: 0.25rem;">Example datasets: Sentinel AWS COG, Planetary Computer, Earth Search</div>
+            Built with <code>ol</code> and <code>ol-stac</code> · Example datasets: Sentinel AWS COG, Planetary Computer, Earth Search
           </div>
+        </div>
+        <div class="status-line">
+          <span id="status" class="status">Ready</span>
         </div>
         <details id="status-details" class="status-details" style="display: none;">
           <summary>📄 View response details</summary>

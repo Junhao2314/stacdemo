@@ -108,7 +108,7 @@ export class StacLoader extends LoaderBase {
         logActivity('stac_rendered', { url, extent });
       }
 
-      this.statusManager.setStatus('Loaded: / 已加载: ' + url);
+      this.statusManager.setStatus('Loaded: ' + url);
       complete();
     });
 
